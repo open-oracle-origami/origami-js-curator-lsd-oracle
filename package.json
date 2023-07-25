@@ -40,7 +40,7 @@
   "dependencies": {
     "@open-oracle-origami/origami-js-mill-coinbase": "^1.0.3-alpha.2",
     "@open-oracle-origami/origami-js-mill-coingecko": "^1.1.3-alpha.1",
-    "@open-oracle-origami/origami-js-sdk": "^1.0.0-alpha.17"
+    "@open-oracle-origami/origami-js-sdk": "^1.0.0-alpha.18"
   },
   "devDependencies": {
     "@tsconfig/recommended": "^1.0.2",
