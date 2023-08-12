@@ -1,48 +1,91 @@
-import {
-  Curator,
-  Museum,
-  Origami,
-  utils,
-} from '@open-oracle-origami/origami-js-sdk'
+import { Curator, Museum, Origami } from '@open-oracle-origami/origami-js-sdk'
+import { ThirdwebSDK } from '@thirdweb-dev/sdk'
+import { TenetTestnet } from '@thirdweb-dev/chains'
 
 // TODO: this becomes it's own evm library or maybe it's an evm price aggregate library...
 // TODO: build threshold and deviation helpers
 // TODO: load from toml config
-const museumCollectionConfig = [
+const museumCollectionConfigs = [
   {
     id: 'tenet-testnet', // required
-    abi: [], // this can default to origami-solidity if not passed
-    seedPhrase: 'hello world', // required unless privateKey
-    privateKey: '0x0000000', // required unless seedPhrase
+    abi: fetch(
+      'https://raw.githubusercontent.com/open-oracle-origami/origami-solidity/main/abi/CollectionImplV1.json'
+    ).then(response => response.json()),
     deviation: 0,
     threshold: 0,
     collections: [
       {
-        id: 'CBETH-USD',
+        id: 'cbeth-usd',
         address: 0x0000000000,
       },
       {
-        id: 'STETH-USD',
+        id: 'steth-usd',
         address: 0x0000000000,
       },
-      // ...etc
     ],
   },
 ]
 
-// TODO: we can figure out what the lastCuration was per collection by loading this from blockchain
-const lastCuration = 0
+const sdk = ThirdwebSDK.fromPrivateKey(
+  `${process.env.TENET_TESTNET_PRIVATE_KEY}`,
+  TenetTestnet
+)
+
+// TODO: Implement a call to fetch from blockchain
+const fetchLastCertifiedOrigami = async () => {
+  return Promise.resolve({} as Origami)
+}
 
 // Just return true or false and let the museum decide to continue
-const certify = () => utils.now() - lastCuration >= 60
+export const certify = async (origami: Origami): Promise<boolean> => {
+  const currentTimestamp = Date.now()
+  const lastOrigami: Origami | null = await fetchLastCertifiedOrigami()
 
-const curate = (origami: Origami) => {
+  // If there's no previous origami, it is certified.
+  if (!lastOrigami) return true
+
+  // Calculate time difference in hours
+  const timeDiff = (currentTimestamp - origami.timestamp) / (1000 * 60 * 60)
+
+  // Certify if origami is 1 hour newer than the last certified one
+  if (timeDiff <= 1) return true
+
+  return false
+}
+
+const curate = async (origami: Origami) => {
+  // Collection is usually something like 'cbeth-usd' and data is the price as an INT
   const { collection, data } = origami
-  // TODO: post this/monitor to the blockchain
+
+  // TODO: This should be dynamic based on the curate context
+  const museumConfig = museumCollectionConfigs.find(
+    x => x.id === 'tenet-testnet'
+  )
+
+  console.log(museumConfig)
+
+  if (!museumConfig) throw new Error('Museum config not found')
+
+  const museumCollectionConfig = museumConfig.collections.find(
+    x => x.id === collection.toLowerCase()
+  )
+
+  if (!museumCollectionConfig) throw new Error('Collection config not found')
+
+  const collectionContract = await sdk.getContract(
+    museumCollectionConfig.address.toString(),
+    (await museumConfig.abi) ?? undefined
+  )
+  const tx = await collectionContract.curate(data)
+
+  console.log(
+    `Origami has been pushed to the blockchain, transaction hash: ${tx.hash}`
+  )
 }
 
 export const planMuseums = (curator: Curator) => {
-  museumCollectionConfig.forEach(config => {
+  museumCollectionConfigs.forEach(config => {
+    // TODO: pass museumCollectionConfig to the Museum instance so we can access it in the certify and curate functions
     curator.plan(Museum, { id: config.id, certify, curate })
   })
 }
