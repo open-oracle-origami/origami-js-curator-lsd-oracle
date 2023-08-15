@@ -52,8 +52,46 @@ const sdk = ThirdwebSDK.fromPrivateKey(
 const sdkContracts: ISdkContract[] = []
 
 // TODO: Implement a call to fetch from blockchain
-const fetchLastCertifiedOrigami = async () => {
+const fetchLastCertifiedOrigami = async (collectionContract: ISdkContract) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const lastUpdateCall = await collectionContract.contract.call('getLastUpdate')
+
+  // TODO: Do something
+
   return Promise.resolve({} as Origami)
+}
+
+const getMuseumConfig = (config: CurateConfig) => {
+  const museumConfig = museumCollectionConfigs.find(x => x.id === config.id)
+  if (!museumConfig) throw new Error('Museum config not found')
+
+  return museumConfig
+}
+
+const getMuseumCollectionConfig = (
+  museumConfig: {
+    id?: string
+    abi?: Promise<any>
+    deviation?: number
+    threshold?: number
+    collections: any
+  },
+  collection: string
+) => {
+  if (!museumConfig.collections) {
+    throw new Error('No collections found in the museum configuration')
+  }
+
+  const museumCollectionConfig = museumConfig.collections.find(
+    (x: { id: string }) => x.id === collection.toLowerCase()
+  )
+
+  if (!museumCollectionConfig) {
+    throw new Error(`Collection config for collection: ${collection} not found`)
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+  return museumCollectionConfig
 }
 
 const getSdkContract = async ({
@@ -80,9 +118,31 @@ const getSdkContract = async ({
 }
 
 // Just return true or false and let the museum decide to continue
-export const certify = async (origami: Origami): Promise<boolean> => {
+export const certify = async (
+  origami: Origami,
+  resource: IResource
+): Promise<boolean> => {
   const currentTimestamp = Date.now()
-  const lastOrigami: Origami | null = await fetchLastCertifiedOrigami()
+  const { collection } = origami
+
+  const config = resource.config as CurateConfig
+  if (!config?.id) throw Error('Define id in config')
+
+  const museumConfig = getMuseumConfig(config)
+
+  const museumCollectionConfig = getMuseumCollectionConfig(
+    museumConfig,
+    collection
+  )
+
+  const collectionContract = await getSdkContract({
+    abi: museumConfig?.abi,
+    contractAddress: museumCollectionConfig.address.toString(),
+  })
+
+  const lastOrigami: Origami | null = await fetchLastCertifiedOrigami(
+    collectionContract
+  )
 
   console.log(lastOrigami)
 
@@ -103,16 +163,14 @@ const curate = async (origami: Origami, resource: IResource): Promise<void> => {
   const { collection, data } = origami
 
   const config = resource.config as CurateConfig
-
   if (!config?.id) throw Error('Define id in config')
 
-  const museumConfig = museumCollectionConfigs.find(x => x.id === config.id)
-  if (!museumConfig) throw new Error('Museum config not found')
+  const museumConfig = getMuseumConfig(config)
 
-  const museumCollectionConfig = museumConfig.collections.find(
-    x => x.id === collection.toLowerCase()
+  const museumCollectionConfig = getMuseumCollectionConfig(
+    museumConfig,
+    collection
   )
-  if (!museumCollectionConfig) throw new Error('Collection config not found')
 
   const collectionContract = await getSdkContract({
     abi: museumConfig?.abi,
