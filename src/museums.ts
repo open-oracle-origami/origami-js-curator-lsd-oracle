@@ -1,6 +1,21 @@
-import { Curator, Museum, Origami } from '@open-oracle-origami/origami-js-sdk'
-import { ThirdwebSDK } from '@thirdweb-dev/sdk'
+import {
+  Curator,
+  Museum,
+  Origami,
+  IResource,
+} from '@open-oracle-origami/origami-js-sdk'
+import { SmartContract, ThirdwebSDK } from '@thirdweb-dev/sdk'
 import { TenetTestnet } from '@thirdweb-dev/chains'
+import { BigNumber } from 'ethers'
+
+interface ISdkContract {
+  address: string
+  contract: SmartContract
+}
+
+type CurateConfig = {
+  id: string
+}
 
 // TODO: this becomes it's own evm library or maybe it's an evm price aggregate library...
 // TODO: build threshold and deviation helpers
@@ -27,13 +42,41 @@ const museumCollectionConfigs = [
 ]
 
 const sdk = ThirdwebSDK.fromPrivateKey(
-  `${process.env.TENET_TESTNET_PRIVATE_KEY}`,
-  TenetTestnet
+  `${process.env.TENET_TESTNET_PRIVATE_KEY}`.trim(),
+  TenetTestnet,
+  {
+    secretKey: `${process.env.THIRDWEB_SECRET_KEY}`,
+  }
 )
+
+const sdkContracts: ISdkContract[] = []
 
 // TODO: Implement a call to fetch from blockchain
 const fetchLastCertifiedOrigami = async () => {
   return Promise.resolve({} as Origami)
+}
+
+const getSdkContract = async ({
+  contractAddress,
+  abi,
+}: {
+  contractAddress: string
+  abi: any
+}) => {
+  let collectionContract = sdkContracts.find(c => c.address === contractAddress)
+
+  if (collectionContract) return collectionContract
+
+  const abiDefinition = (await abi).abi
+
+  collectionContract = {
+    address: contractAddress,
+    contract: await sdk.getContract(contractAddress, abiDefinition),
+  }
+
+  sdkContracts.push(collectionContract)
+
+  return collectionContract
 }
 
 // Just return true or false and let the museum decide to continue
@@ -41,8 +84,10 @@ export const certify = async (origami: Origami): Promise<boolean> => {
   const currentTimestamp = Date.now()
   const lastOrigami: Origami | null = await fetchLastCertifiedOrigami()
 
+  console.log(lastOrigami)
+
   // If there's no previous origami, it is certified.
-  if (!lastOrigami) return true
+  if (!lastOrigami?.timestamp) return true
 
   // Calculate time difference in hours
   const timeDiff = (currentTimestamp - origami.timestamp) / (1000 * 60 * 60)
@@ -53,28 +98,35 @@ export const certify = async (origami: Origami): Promise<boolean> => {
   return false
 }
 
-const curate = async (origami: Origami) => {
+const curate = async (origami: Origami, resource: IResource): Promise<void> => {
   // Collection is usually something like 'cbeth-usd' and data is the price as an INT
   const { collection, data } = origami
 
-  // TODO: This should be dynamic based on the curate context
-  const museumConfig = museumCollectionConfigs.find(
-    x => x.id === 'tenet-testnet'
-  )
+  const config = resource.config as CurateConfig
 
+  if (!config?.id) throw Error('Define id in config')
+
+  const museumConfig = museumCollectionConfigs.find(x => x.id === config.id)
   if (!museumConfig) throw new Error('Museum config not found')
 
   const museumCollectionConfig = museumConfig.collections.find(
     x => x.id === collection.toLowerCase()
   )
-
   if (!museumCollectionConfig) throw new Error('Collection config not found')
 
-  const collectionContract = await sdk.getContract(
-    museumCollectionConfig.address.toString(),
-    (await museumConfig.abi) ?? undefined
-  )
-  const tx = await collectionContract.curate(data)
+  const collectionContract = await getSdkContract({
+    abi: museumConfig?.abi,
+    contractAddress: museumCollectionConfig.address.toString(),
+  })
+
+  console.log({ message: 'HEHE', collectionContract, data })
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+  const tx = await collectionContract.contract.call('curate', [
+    BigNumber.from(data),
+  ])
+
+  console.log({ tx })
 
   console.log(
     `Origami has been pushed to the blockchain, transaction hash: ${tx.hash}`
@@ -83,7 +135,6 @@ const curate = async (origami: Origami) => {
 
 export const planMuseums = (curator: Curator) => {
   museumCollectionConfigs.forEach(config => {
-    // TODO: pass museumCollectionConfig to the Museum instance so we can access it in the certify and curate functions
     curator.plan(Museum, { config, id: config.id, certify, curate })
   })
 }
