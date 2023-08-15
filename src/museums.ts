@@ -53,12 +53,7 @@ const sdkContracts: ISdkContract[] = []
 
 // TODO: Implement a call to fetch from blockchain
 const fetchLastCertifiedOrigami = async (collectionContract: ISdkContract) => {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const lastUpdateCall = await collectionContract.contract.call('getLastUpdate')
-
-  // TODO: Do something
-
-  return Promise.resolve({} as Origami)
+  return collectionContract.contract.call('latestRoundData')
 }
 
 const getMuseumConfig = (config: CurateConfig) => {
@@ -122,7 +117,7 @@ export const certify = async (
   origami: Origami,
   resource: IResource
 ): Promise<boolean> => {
-  const currentTimestamp = Date.now()
+  const currentTimestamp = new Date()
   const { collection } = origami
 
   const config = resource.config as CurateConfig
@@ -140,20 +135,26 @@ export const certify = async (
     contractAddress: museumCollectionConfig.address.toString(),
   })
 
-  const lastOrigami: Origami | null = await fetchLastCertifiedOrigami(
-    collectionContract
-  )
+  const lastOrigami = await fetchLastCertifiedOrigami(collectionContract)
 
-  console.log(lastOrigami)
+  const lastOrigamiTimestamp = lastOrigami?.updatedAt
+    ? new Date(Number(`${lastOrigami?.updatedAt}`) * 1000)
+    : null
 
   // If there's no previous origami, it is certified.
-  if (!lastOrigami?.timestamp) return true
+  if (!lastOrigamiTimestamp) return true
 
   // Calculate time difference in hours
-  const timeDiff = (currentTimestamp - origami.timestamp) / (1000 * 60 * 60)
+  const timeDiff =
+    (currentTimestamp.getTime() - lastOrigamiTimestamp.getTime()) /
+    (1000 * 60 * 60)
 
-  // Certify if origami is 1 hour newer than the last certified one
-  if (timeDiff <= 1) return true
+  // Certify if the last origami is more than 1 hour old
+  if (timeDiff >= 1) return true
+
+  console.log(
+    `Did not certify origami... ${(1 - timeDiff).toFixed(4)} hours remaining`
+  )
 
   return false
 }
