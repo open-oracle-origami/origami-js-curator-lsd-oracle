@@ -16,11 +16,11 @@ const museumCollectionConfigs = [
     collections: [
       {
         id: 'cbeth-usd',
-        address: 0x0000000000,
+        address: '0xF89dDeF302dFaD1Dd108D6C15c9Aa29a776bB89a',
       },
       {
         id: 'steth-usd',
-        address: 0x0000000000,
+        address: '0xE486c070b54B09F38b3D5080765991226498e708',
       },
     ],
   },
@@ -62,8 +62,6 @@ const curate = async (origami: Origami) => {
     x => x.id === 'tenet-testnet'
   )
 
-  console.log(museumConfig)
-
   if (!museumConfig) throw new Error('Museum config not found')
 
   const museumCollectionConfig = museumConfig.collections.find(
@@ -86,6 +84,6 @@ const curate = async (origami: Origami) => {
 export const planMuseums = (curator: Curator) => {
   museumCollectionConfigs.forEach(config => {
     // TODO: pass museumCollectionConfig to the Museum instance so we can access it in the certify and curate functions
-    curator.plan(Museum, { id: config.id, certify, curate })
+    curator.plan(Museum, { config, id: config.id, certify, curate })
   })
 }
