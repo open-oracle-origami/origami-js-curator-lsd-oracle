@@ -120,6 +120,13 @@ export const certify = async (
   const currentTimestamp = new Date()
   const { collection } = origami
 
+  const balance = await sdk.wallet.balance()
+
+  if (parseFloat(balance.displayValue) <= 0.01) {
+    console.log(`Insufficient balance ${balance.displayValue}`)
+    return false
+  }
+
   const config = resource.config as CurateConfig
   if (!config?.id) throw Error('Define id in config')
 
@@ -188,7 +195,7 @@ const curate = async (origami: Origami, resource: IResource): Promise<void> => {
   console.log({ tx })
 
   console.log(
-    `Origami has been pushed to the blockchain, transaction hash: ${tx.hash}`
+    `Origami has been pushed to the blockchain, transaction hash: ${tx.receipt.transactionHash}`
   )
 }
 
