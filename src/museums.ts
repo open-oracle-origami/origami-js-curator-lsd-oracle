@@ -32,10 +32,12 @@ const museumCollectionConfigs = [
       {
         id: 'cbeth-usd',
         address: '0xF89dDeF302dFaD1Dd108D6C15c9Aa29a776bB89a',
+        processing: false,
       },
       {
         id: 'steth-usd',
         address: '0xE486c070b54B09F38b3D5080765991226498e708',
+        processing: false,
       },
     ],
   },
@@ -112,6 +114,13 @@ const getSdkContract = async ({
   return collectionContract
 }
 
+const isProcessing = museumCollectionConfig =>
+  !!museumCollectionConfig.processing
+const setProcessingFalse = museumCollectionConfig =>
+  (museumCollectionConfig.processing = false)
+const setProcessingTrue = museumCollectionConfig =>
+  (museumCollectionConfig.processing = true)
+
 // Just return true or false and let the museum decide to continue
 export const certify = async (
   origami: Origami,
@@ -128,7 +137,6 @@ export const certify = async (
   }
 
   const config = resource.config as CurateConfig
-  if (!config?.id) throw Error('Define id in config')
 
   const museumConfig = getMuseumConfig(config)
 
@@ -141,6 +149,12 @@ export const certify = async (
     abi: museumConfig?.abi,
     contractAddress: museumCollectionConfig.address.toString(),
   })
+
+  // We prevent situations where blockchain interaction take time
+  // We do not want a race condition
+  if (isProcessing) return false
+
+  setProcessingTrue(museumCollectionConfig)
 
   const lastOrigami = await fetchLastCertifiedOrigami(collectionContract)
 
@@ -163,6 +177,7 @@ export const certify = async (
     `Did not certify origami... ${(1 - timeDiff).toFixed(4)} hours remaining`
   )
 
+  setProcessingFalse(museumCollectionConfig)
   return false
 }
 
@@ -171,7 +186,6 @@ const curate = async (origami: Origami, resource: IResource): Promise<void> => {
   const { collection, data } = origami
 
   const config = resource.config as CurateConfig
-  if (!config?.id) throw Error('Define id in config')
 
   const museumConfig = getMuseumConfig(config)
 
@@ -185,8 +199,6 @@ const curate = async (origami: Origami, resource: IResource): Promise<void> => {
     contractAddress: museumCollectionConfig.address.toString(),
   })
 
-  console.log({ message: 'HEHE', collectionContract, data })
-
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const tx = await collectionContract.contract.call('curate', [
     BigNumber.from(data),
@@ -195,8 +207,10 @@ const curate = async (origami: Origami, resource: IResource): Promise<void> => {
   console.log({ tx })
 
   console.log(
-    `Origami has been pushed to the blockchain, transaction hash: ${tx.receipt.transactionHash}`
+    `Origami has been pushed to the blockchain, transaction hash: ${tx?.receipt?.transactionHash}`
   )
+
+  setProcessingFalse(museumCollectionConfig)
 }
 
 export const planMuseums = (curator: Curator) => {
