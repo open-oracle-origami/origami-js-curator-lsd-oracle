@@ -3,6 +3,20 @@ import { SmartContract, ThirdwebSDK } from '@thirdweb-dev/sdk'
 import { TenetTestnet } from '@thirdweb-dev/chains'
 import { BigNumber } from 'ethers'
 
+interface Collection {
+  id: string
+  processing: boolean
+  address: string
+  [key: string]: any
+}
+
+interface MuseumConfig {
+  id?: string
+  abi?: Promise<any>
+  deviation?: number
+  threshold?: number
+  collections: Collection[]
+}
 interface ISdkContract {
   address: string
   contract: SmartContract
@@ -56,16 +70,7 @@ const getMuseumConfig = (config: CurateConfig) => {
   return museumConfig
 }
 
-const getMuseumCollectionConfig = (
-  museumConfig: {
-    id?: string
-    abi?: Promise<any>
-    deviation?: number
-    threshold?: number
-    collections: any
-  },
-  collection: string
-) => {
+const getMuseumCollectionConfig = (museumConfig: MuseumConfig, collection: string): Collection | never => {
   if (!museumConfig.collections) {
     throw new Error('No collections found in the museum configuration')
   }
@@ -76,7 +81,6 @@ const getMuseumCollectionConfig = (
     throw new Error(`Collection config for collection: ${collection} not found`)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
   return museumCollectionConfig
 }
 
@@ -97,9 +101,9 @@ const getSdkContract = async ({ contractAddress, abi }: { contractAddress: strin
   return collectionContract
 }
 
-const isProcessing = museumCollectionConfig => !!museumCollectionConfig.processing
-const setProcessingFalse = museumCollectionConfig => (museumCollectionConfig.processing = false)
-const setProcessingTrue = museumCollectionConfig => (museumCollectionConfig.processing = true)
+const isProcessing = (museumCollectionConfig: Collection) => museumCollectionConfig.processing
+const setProcessingFalse = (museumCollectionConfig: Collection) => (museumCollectionConfig.processing = false)
+const setProcessingTrue = (museumCollectionConfig: Collection) => (museumCollectionConfig.processing = true)
 
 // Just return true or false and let the museum decide to continue
 export const certify = async (origami: Origami, resource: IResource): Promise<boolean> => {
@@ -119,16 +123,18 @@ export const certify = async (origami: Origami, resource: IResource): Promise<bo
 
   const museumCollectionConfig = getMuseumCollectionConfig(museumConfig, collection)
 
+  if (!museumCollectionConfig) return false
+
+  // We prevent situations where blockchain interaction take time
+  // We do not want a race condition
+  if (isProcessing(museumCollectionConfig)) return false
+
+  setProcessingTrue(museumCollectionConfig)
+
   const collectionContract = await getSdkContract({
     abi: museumConfig?.abi,
     contractAddress: museumCollectionConfig.address.toString(),
   })
-
-  // We prevent situations where blockchain interaction take time
-  // We do not want a race condition
-  if (isProcessing) return false
-
-  setProcessingTrue(museumCollectionConfig)
 
   const lastOrigami = await fetchLastCertifiedOrigami(collectionContract)
 
