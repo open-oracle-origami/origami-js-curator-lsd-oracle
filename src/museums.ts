@@ -1,9 +1,4 @@
-import {
-  Curator,
-  Museum,
-  Origami,
-  IResource,
-} from '@open-oracle-origami/origami-js-sdk'
+import { Curator, Museum, Origami, IResource } from '@open-oracle-origami/origami-js-sdk'
 import { SmartContract, ThirdwebSDK } from '@thirdweb-dev/sdk'
 import { TenetTestnet } from '@thirdweb-dev/chains'
 import { BigNumber } from 'ethers'
@@ -43,13 +38,9 @@ const museumCollectionConfigs = [
   },
 ]
 
-const sdk = ThirdwebSDK.fromPrivateKey(
-  `${process.env.TENET_TESTNET_PRIVATE_KEY}`.trim(),
-  TenetTestnet,
-  {
-    secretKey: `${process.env.THIRDWEB_SECRET_KEY}`,
-  }
-)
+const sdk = ThirdwebSDK.fromPrivateKey(`${process.env.TENET_TESTNET_PRIVATE_KEY}`.trim(), TenetTestnet, {
+  secretKey: `${process.env.THIRDWEB_SECRET_KEY}`,
+})
 
 const sdkContracts: ISdkContract[] = []
 
@@ -79,9 +70,7 @@ const getMuseumCollectionConfig = (
     throw new Error('No collections found in the museum configuration')
   }
 
-  const museumCollectionConfig = museumConfig.collections.find(
-    (x: { id: string }) => x.id === collection.toLowerCase()
-  )
+  const museumCollectionConfig = museumConfig.collections.find((x: { id: string }) => x.id === collection.toLowerCase())
 
   if (!museumCollectionConfig) {
     throw new Error(`Collection config for collection: ${collection} not found`)
@@ -91,13 +80,7 @@ const getMuseumCollectionConfig = (
   return museumCollectionConfig
 }
 
-const getSdkContract = async ({
-  contractAddress,
-  abi,
-}: {
-  contractAddress: string
-  abi: any
-}) => {
+const getSdkContract = async ({ contractAddress, abi }: { contractAddress: string; abi: any }) => {
   let collectionContract = sdkContracts.find(c => c.address === contractAddress)
 
   if (collectionContract) return collectionContract
@@ -114,18 +97,12 @@ const getSdkContract = async ({
   return collectionContract
 }
 
-const isProcessing = museumCollectionConfig =>
-  !!museumCollectionConfig.processing
-const setProcessingFalse = museumCollectionConfig =>
-  (museumCollectionConfig.processing = false)
-const setProcessingTrue = museumCollectionConfig =>
-  (museumCollectionConfig.processing = true)
+const isProcessing = museumCollectionConfig => !!museumCollectionConfig.processing
+const setProcessingFalse = museumCollectionConfig => (museumCollectionConfig.processing = false)
+const setProcessingTrue = museumCollectionConfig => (museumCollectionConfig.processing = true)
 
 // Just return true or false and let the museum decide to continue
-export const certify = async (
-  origami: Origami,
-  resource: IResource
-): Promise<boolean> => {
+export const certify = async (origami: Origami, resource: IResource): Promise<boolean> => {
   const currentTimestamp = new Date()
   const { collection } = origami
 
@@ -140,10 +117,7 @@ export const certify = async (
 
   const museumConfig = getMuseumConfig(config)
 
-  const museumCollectionConfig = getMuseumCollectionConfig(
-    museumConfig,
-    collection
-  )
+  const museumCollectionConfig = getMuseumCollectionConfig(museumConfig, collection)
 
   const collectionContract = await getSdkContract({
     abi: museumConfig?.abi,
@@ -158,24 +132,18 @@ export const certify = async (
 
   const lastOrigami = await fetchLastCertifiedOrigami(collectionContract)
 
-  const lastOrigamiTimestamp = lastOrigami?.updatedAt
-    ? new Date(Number(`${lastOrigami?.updatedAt}`) * 1000)
-    : null
+  const lastOrigamiTimestamp = lastOrigami?.updatedAt ? new Date(Number(`${lastOrigami?.updatedAt}`) * 1000) : null
 
   // If there's no previous origami, it is certified.
   if (!lastOrigamiTimestamp) return true
 
   // Calculate time difference in hours
-  const timeDiff =
-    (currentTimestamp.getTime() - lastOrigamiTimestamp.getTime()) /
-    (1000 * 60 * 60)
+  const timeDiff = (currentTimestamp.getTime() - lastOrigamiTimestamp.getTime()) / (1000 * 60 * 60)
 
   // Certify if the last origami is more than 1 hour old
   if (timeDiff >= 1) return true
 
-  console.log(
-    `Did not certify origami... ${(1 - timeDiff).toFixed(4)} hours remaining`
-  )
+  console.log(`Did not certify origami... ${(1 - timeDiff).toFixed(4)} hours remaining`)
 
   setProcessingFalse(museumCollectionConfig)
   return false
@@ -189,10 +157,7 @@ const curate = async (origami: Origami, resource: IResource): Promise<void> => {
 
   const museumConfig = getMuseumConfig(config)
 
-  const museumCollectionConfig = getMuseumCollectionConfig(
-    museumConfig,
-    collection
-  )
+  const museumCollectionConfig = getMuseumCollectionConfig(museumConfig, collection)
 
   const collectionContract = await getSdkContract({
     abi: museumConfig?.abi,
@@ -200,15 +165,11 @@ const curate = async (origami: Origami, resource: IResource): Promise<void> => {
   })
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  const tx = await collectionContract.contract.call('curate', [
-    BigNumber.from(data),
-  ])
+  const tx = await collectionContract.contract.call('curate', [BigNumber.from(data)])
 
   console.log({ tx })
 
-  console.log(
-    `Origami has been pushed to the blockchain, transaction hash: ${tx?.receipt?.transactionHash}`
-  )
+  console.log(`Origami has been pushed to the blockchain, transaction hash: ${tx?.receipt?.transactionHash}`)
 
   setProcessingFalse(museumCollectionConfig)
 }
