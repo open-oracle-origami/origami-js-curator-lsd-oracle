@@ -17,6 +17,7 @@ interface MuseumConfig {
   threshold?: number
   collections: Collection[]
 }
+
 interface ISdkContract {
   address: string
   contract: SmartContract
